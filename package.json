@@ -1,0 +1,1 @@
+{"description":"The Absurd Clause Contest — one absurd clause hidden in a terms-of-service agreement","engines":{"node":">=22.18"},"license":"MIT","name":"makefun-absurd-clause","private":true,"scripts":{"start":"node main.ts"},"type":"module","version":"1.0.0"}
