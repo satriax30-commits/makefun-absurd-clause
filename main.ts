@@ -65,35 +65,60 @@ function fail(message: string): never {
 }
 
 // Self-check gate, run before and after the write. Fails loudly instead of
-// ever producing an invalid entry.
+// ever producing an invalid entry. Each rule is its own small predicate so
+// a future rule change touches one place, not the whole gate.
+function isBlank(text: string): boolean {
+  return text.trim().length === 0;
+}
+
+function isSingleLine(text: string): boolean {
+  return !text.includes("\n") && !text.includes("\r");
+}
+
+function isWithinLength(text: string): boolean {
+  const count = charCount(text);
+  return count >= MIN_CHARS && count <= MAX_CHARS;
+}
+
 function checkGate(text: string): void {
-  if (charCount(text) < MIN_CHARS || charCount(text) > MAX_CHARS) {
+  if (!isWithinLength(text)) {
     fail(
       `entry is ${charCount(text)} characters, outside ${MIN_CHARS}-${MAX_CHARS}`,
     );
   }
-  if (text.trim().length === 0) {
+  if (isBlank(text)) {
     fail("entry is only white space");
   }
-  if (text.includes("\n") || text.includes("\r")) {
+  if (!isSingleLine(text)) {
     fail("entry must be a single line");
   }
 }
 
-function main(): void {
-  const outputPath = process.argv[2] ?? DEFAULT_OUTPUT_PATH;
+function resolveOutputPath(): string {
+  return process.argv[2] ?? DEFAULT_OUTPUT_PATH;
+}
 
-  checkGate(ENTRY);
-
+// Writes the entry, then proves what landed on disk is byte-for-byte the
+// entry and still passes the gate — a write that silently truncated or
+// re-encoded the text must fail here, never pass quietly.
+function writeAndVerify(outputPath: string, text: string): string {
   mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, ENTRY, "utf8");
+  writeFileSync(outputPath, text, "utf8");
 
-  // Read-back check: what landed on disk must be byte-for-byte the entry.
   const written = readFileSync(outputPath, "utf8");
-  if (written !== ENTRY) {
+  if (written !== text) {
     fail("read-back mismatch: file content differs from the entry");
   }
   checkGate(written);
+  return written;
+}
+
+function main(): void {
+  const outputPath = resolveOutputPath();
+
+  checkGate(ENTRY);
+
+  const written = writeAndVerify(outputPath, ENTRY);
 
   const bytes = Buffer.byteLength(written, "utf8");
   console.log(
